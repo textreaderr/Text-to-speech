@@ -5,7 +5,7 @@ A program that takes texts and reads it to you
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text-to-Speech Interface (Chris Hansen Style)</title>
+    <title>Text-to-Speech Interface (Chris Hansen Voice)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -33,14 +33,6 @@ A program that takes texts and reads it to you
             resize: none;
             margin-bottom: 10px;
         }
-        #voice-select {
-            width: 80%;
-            max-width: 600px;
-            padding: 10px;
-            font-size: 1.2em;
-            margin-bottom: 10px;
-            border-radius: 8px;
-        }
         #speak-button {
             padding: 10px 20px;
             font-size: 1.2em;
@@ -62,12 +54,13 @@ A program that takes texts and reads it to you
             font-size: 1.1em;
             color: #555;
             text-align: center;
+            max-width: 80%;
         }
         @media (max-width: 600px) {
             h1 {
                 font-size: 1.8em;
             }
-            #text-input, #voice-select {
+            #text-input {
                 width: 90%;
                 height: 100px;
             }
@@ -81,65 +74,47 @@ A program that takes texts and reads it to you
 <body>
     <h1>Text-to-Speech Interface</h1>
     <textarea id="text-input" placeholder="Type or paste text to speak..."></textarea>
-    <select id="voice-select">
-        <option value="">Select a voice</option>
-    </select>
     <button id="speak-button">Speak Text</button>
     <div id="status">Enter text and click the button to hear it spoken</div>
 
     <script>
         const speakButton = document.getElementById('speak-button');
         const textInput = document.getElementById('text-input');
-        const voiceSelect = document.getElementById('voice-select');
         const status = document.getElementById('status');
 
         // Check if Web Speech API (SpeechSynthesis) is available
         if (!window.speechSynthesis) {
-            status.textContent = 'Sorry, your browser does not support text-to-speech. Try Chrome or Safari.';
+            status.textContent = 'Error: Browser does not support text-to-speech. Try Chrome or Safari.';
             speakButton.disabled = true;
-            voiceSelect.disabled = true;
             return;
         }
 
         let isSpeaking = false;
         let voices = [];
-        let defaultVoiceIndex = null;
+        let defaultVoice = null;
 
         // Load voices and set default voice
         function loadVoices() {
             voices = window.speechSynthesis.getVoices();
-            voiceSelect.innerHTML = '<option value="">Select a voice</option>';
             if (voices.length === 0) {
-                status.textContent = 'No voices available. Try a different browser (e.g., Chrome).';
+                status.textContent = 'Error: No voices available. Try Chrome or Safari, or check device settings.';
                 speakButton.disabled = true;
                 return;
             }
 
             // Prioritize a male, American English voice to approximate Chris Hansen
-            voices.forEach((voice, index) => {
-                const option = document.createElement('option');
-                option.value = index;
-                option.textContent = `${voice.name} (${voice.lang})`;
-                voiceSelect.appendChild(option);
+            defaultVoice = voices.find(voice => 
+                voice.lang.includes('en') && 
+                (voice.name.toLowerCase().includes('male') || 
+                 voice.name.includes('David') || 
+                 voice.name.includes('Mark'))
+            ) || voices.find(voice => voice.lang.includes('en')) || voices[0];
 
-                // Set default voice: prefer male, en-US voices (e.g., Google US English Male, Microsoft David)
-                if (defaultVoiceIndex === null && voice.lang.includes('en') &&
-                    (voice.name.toLowerCase().includes('male') || voice.name.includes('David') || voice.name.includes('Mark'))) {
-                    defaultVoiceIndex = index;
-                    voiceSelect.value = index;
-                    status.textContent = `Default voice set to ${voice.name}. Enter text to speak.`;
-                }
-            });
-
-            // Fallback to first en-US voice or first available voice
-            if (defaultVoiceIndex === null) {
-                defaultVoiceIndex = voices.findIndex(voice => voice.lang.includes('en')) || 0;
-                voiceSelect.value = defaultVoiceIndex;
-                status.textContent = `Default voice set to ${voices[defaultVoiceIndex].name}. Enter text to speak.`;
-            }
+            status.textContent = `Voice set to ${defaultVoice.name}. Enter text to speak.`;
+            speakButton.disabled = false;
         }
 
-        // Voices may load asynchronously, so wait for them
+        // Handle asynchronous voice loading
         window.speechSynthesis.onvoiceschanged = loadVoices;
         loadVoices(); // Try loading voices immediately
 
@@ -164,8 +139,8 @@ A program that takes texts and reads it to you
             }
 
             // Check if voices are loaded
-            if (voices.length === 0) {
-                status.textContent = 'No voices loaded. Please try again or use Chrome/Safari.';
+            if (voices.length === 0 || !defaultVoice) {
+                status.textContent = 'Error: Voices not loaded. Try refreshing or using Chrome/Safari.';
                 return;
             }
 
@@ -174,21 +149,13 @@ A program that takes texts and reads it to you
             utterance.lang = 'en-US';
             utterance.volume = 1; // 0 to 1
             utterance.rate = 0.9; // Slightly slower for authoritative tone
-            utterance.pitch = 0.8; // Slightly lower for deeper tone
-
-            // Set voice: use selected voice or default
-            const selectedVoiceIndex = voiceSelect.value;
-            if (selectedVoiceIndex !== '') {
-                utterance.voice = voices[selectedVoiceIndex];
-                status.textContent = `Speaking with ${voices[selectedVoiceIndex].name}...`;
-            } else {
-                utterance.voice = voices[defaultVoiceIndex];
-                status.textContent = `Speaking with default voice (${voices[defaultVoiceIndex].name})...`;
-            }
+            utterance.pitch = 0.8; // Lower for deeper tone
+            utterance.voice = defaultVoice;
 
             // Update UI when speech starts
             speakButton.textContent = 'Stop Speaking';
             speakButton.classList.add('speaking');
+            status.textContent = `Speaking with ${defaultVoice.name}...`;
             isSpeaking = true;
 
             // When speech ends, reset UI
@@ -201,7 +168,7 @@ A program that takes texts and reads it to you
 
             // Handle errors
             utterance.onerror = (event) => {
-                status.textContent = `Speech error: ${event.error}. Check audio settings or try a different voice/browser.`;
+                status.textContent = `Error: ${event.error}. Check audio (unmute, check headphones), or try Chrome/Safari.`;
                 speakButton.textContent = 'Speak Text';
                 speakButton.classList.remove('speaking');
                 isSpeaking = false;
@@ -214,12 +181,6 @@ A program that takes texts and reads it to you
         // Update status when user types
         textInput.addEventListener('input', () => {
             status.textContent = textInput.value.trim() ? 'Text ready to speak.' : 'Enter text to speak.';
-        });
-
-        // Update status when voice is selected
-        voiceSelect.addEventListener('change', () => {
-            const selectedIndex = voiceSelect.value;
-            status.textContent = selectedIndex ? `Voice selected: ${voices[selectedIndex].name}. Enter text to speak.` : 'Using default voice. Enter text to speak.';
         });
     </script>
 </body>
